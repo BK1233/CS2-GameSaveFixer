@@ -137,34 +137,60 @@ public class SaveRepairEngine
             throw new FileNotFoundException($"Save file not found: {filePath}");
         }
 
-        using var zip = ZipFile.OpenRead(filePath);
-        foreach (var entry in zip.Entries)
+        // Try standard ZipArchive loading
+        try
         {
-            using var ms = new MemoryStream();
-            using var stream = entry.Open();
-            stream.CopyTo(ms);
-            byte[] bytes = ms.ToArray();
+            using var zip = ZipFile.OpenRead(filePath);
+            foreach (var entry in zip.Entries)
+            {
+                using var ms = new MemoryStream();
+                using var stream = entry.Open();
+                stream.CopyTo(ms);
+                byte[] bytes = ms.ToArray();
 
-            if (entry.FullName.Equals("metadata.json", StringComparison.OrdinalIgnoreCase))
-            {
-                string json = Encoding.UTF8.GetString(bytes);
-                archive.Metadata = JsonSerializer.Deserialize<MetadataHeader>(json) ?? new MetadataHeader();
+                ProcessArchiveEntry(archive, entry.FullName, bytes);
             }
-            else if (entry.FullName.Equals("Entities.bin", StringComparison.OrdinalIgnoreCase) || entry.FullName.EndsWith("Entities.bin"))
+        }
+        catch (InvalidDataException)
+        {
+            // Truncated/corrupted ZIP header recovery mode: read raw binary bytes directly
+            byte[] rawBytes = File.ReadAllBytes(filePath);
+            if (rawBytes.Length == 0)
             {
-                archive.EntitiesData = bytes;
+                throw new InvalidDataException("Save file is completely empty (0 bytes).");
             }
-            else if (entry.FullName.Equals("Simulation.bin", StringComparison.OrdinalIgnoreCase) || entry.FullName.EndsWith("Simulation.bin"))
+
+            Console.WriteLine("[!] Warning: ZIP central directory header missing or corrupted. Attempting raw binary stream recovery...");
+            archive.EntitiesData = rawBytes;
+            archive.Metadata = new MetadataHeader
             {
-                archive.SimulationData = bytes;
-            }
-            else
-            {
-                archive.AdditionalFiles[entry.FullName] = bytes;
-            }
+                CityName = Path.GetFileNameWithoutExtension(filePath),
+                GameVersion = "1.0.0 (Recovered)"
+            };
         }
 
         return archive;
+    }
+
+    private static void ProcessArchiveEntry(SaveArchive archive, string entryName, byte[] bytes)
+    {
+        if (entryName.Equals("metadata.json", StringComparison.OrdinalIgnoreCase))
+        {
+            string json = Encoding.UTF8.GetString(bytes);
+            archive.Metadata = JsonSerializer.Deserialize<MetadataHeader>(json) ?? new MetadataHeader();
+        }
+        else if (entryName.Equals("Entities.bin", StringComparison.OrdinalIgnoreCase) || entryName.EndsWith("Entities.bin"))
+        {
+            archive.EntitiesData = bytes;
+        }
+        else if (entryName.Equals("Simulation.bin", StringComparison.OrdinalIgnoreCase) || entryName.EndsWith("Simulation.bin"))
+        {
+            archive.SimulationData = bytes;
+        }
+        else
+        {
+            archive.AdditionalFiles[entryName] = bytes;
+        }
     }
 
     public static void SaveArchiveFile(SaveArchive archive, string outputPath)
