@@ -4,12 +4,21 @@ using System.Text.Json;
 
 namespace CS2SaveFixer.Tool;
 
+public class RepairResult
+{
+    public SaveArchive RepairedArchive { get; set; } = new();
+    public List<string> FixesApplied { get; set; } = new();
+    public int NanValuesSanitized { get; set; } = 0;
+    public int NullGuidsRemapped { get; set; } = 0;
+}
+
 public class SaveRepairEngine
 {
     private static readonly byte[] FallbackGuidBytes = Guid.Parse("11111111-2222-3333-4444-555555555555").ToByteArray();
 
-    public static SaveArchive Repair(SaveArchive archive, bool cleanNan, bool remapPrefabs)
+    public static RepairResult Repair(SaveArchive archive, bool cleanNan, bool remapPrefabs)
     {
+        var result = new RepairResult();
         var repaired = new SaveArchive
         {
             Metadata = archive.Metadata,
@@ -21,32 +30,54 @@ public class SaveRepairEngine
 
         if (entitiesBuffer.Length >= 4)
         {
-            // Enforce COSV Header
-            entitiesBuffer[0] = (byte)'C';
-            entitiesBuffer[1] = (byte)'O';
-            entitiesBuffer[2] = (byte)'S';
-            entitiesBuffer[3] = (byte)'V';
+            if (entitiesBuffer[0] != (byte)'C' || entitiesBuffer[1] != (byte)'O' ||
+                entitiesBuffer[2] != (byte)'S' || entitiesBuffer[3] != (byte)'V')
+            {
+                // Enforce COSV Header
+                entitiesBuffer[0] = (byte)'C';
+                entitiesBuffer[1] = (byte)'O';
+                entitiesBuffer[2] = (byte)'S';
+                entitiesBuffer[3] = (byte)'V';
+                result.FixesApplied.Add("Restored missing or corrupted COSV magic header bytes in Entities.bin.");
+            }
         }
 
         if (cleanNan)
         {
-            SanitizeFloatingPointNumbers(entitiesBuffer);
+            int nanCount = SanitizeFloatingPointNumbers(entitiesBuffer);
+            result.NanValuesSanitized = nanCount;
+            if (nanCount > 0)
+            {
+                result.FixesApplied.Add($"Sanitized {nanCount} corrupted floating-point (NaN/Infinity) values in entity component data.");
+            }
         }
 
         if (remapPrefabs)
         {
-            RemapNullGuids(entitiesBuffer);
+            int guidCount = RemapNullGuids(entitiesBuffer);
+            result.NullGuidsRemapped = guidCount;
+            if (guidCount > 0)
+            {
+                result.FixesApplied.Add($"Remapped {guidCount} unmapped or missing asset GUID references to safe fallback prefabs.");
+            }
         }
 
         repaired.EntitiesData = entitiesBuffer;
 
         // Clean metadata active mods list
+        int originalModCount = repaired.Metadata.ActiveMods.Count;
         repaired.Metadata.ActiveMods = repaired.Metadata.ActiveMods.Distinct().ToList();
+        if (originalModCount != repaired.Metadata.ActiveMods.Count)
+        {
+            result.FixesApplied.Add($"Deduplicated active mods metadata list ({originalModCount} -> {repaired.Metadata.ActiveMods.Count}).");
+        }
 
         // Rebuild / repair CID (Content Index Directory) index buffer
         repaired.AdditionalFiles["savegame.cid"] = BuildCidIndexData(repaired);
+        result.FixesApplied.Add("Rebuilt and refreshed Content Index Directory (savegame.cid) manifest.");
 
-        return repaired;
+        result.RepairedArchive = repaired;
+        return result;
     }
 
     public static byte[] BuildCidIndexData(SaveArchive archive)
@@ -91,8 +122,9 @@ public class SaveRepairEngine
         return ms.ToArray();
     }
 
-    private static void SanitizeFloatingPointNumbers(byte[] buffer)
+    private static int SanitizeFloatingPointNumbers(byte[] buffer)
     {
+        int count = 0;
         // Guard: skip COSV header (8 bytes)
         int startOffset = buffer.Length >= 8 ? 8 : 0;
         for (int i = startOffset; i <= buffer.Length - 4; i += 4)
@@ -102,12 +134,15 @@ public class SaveRepairEngine
             {
                 byte[] zeroBytes = BitConverter.GetBytes(0.0f);
                 Buffer.BlockCopy(zeroBytes, 0, buffer, i, 4);
+                count++;
             }
         }
+        return count;
     }
 
-    private static void RemapNullGuids(byte[] buffer)
+    private static int RemapNullGuids(byte[] buffer)
     {
+        int count = 0;
         // Guard: skip COSV header (8 bytes)
         int startOffset = buffer.Length >= 8 ? 8 : 0;
         for (int i = startOffset; i <= buffer.Length - 16; i += 16)
@@ -124,8 +159,10 @@ public class SaveRepairEngine
             if (isNull)
             {
                 Buffer.BlockCopy(FallbackGuidBytes, 0, buffer, i, 16);
+                count++;
             }
         }
+        return count;
     }
 
     public static SaveArchive LoadArchive(string filePath)
