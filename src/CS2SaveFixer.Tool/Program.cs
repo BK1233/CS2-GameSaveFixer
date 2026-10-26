@@ -26,6 +26,12 @@ class Program
             return 1;
         }
 
+        if (Directory.Exists(inputPath))
+        {
+            Console.WriteLine($"Error: Input path '{inputPath}' is a directory, not a save file (.coc / .zip / .cok). Please specify the full path to your save file.");
+            return 1;
+        }
+
         try
         {
             Console.WriteLine($"[+] Loading save archive: {inputPath}");
@@ -44,12 +50,15 @@ class Program
             }
             else if (command == "fix" || command == "repair")
             {
+                string defaultFileName = Path.GetFileNameWithoutExtension(inputPath) + "_repaired" + Path.GetExtension(inputPath);
+
                 if (string.IsNullOrEmpty(outputPath))
                 {
-                    outputPath = Path.Combine(
-                        Path.GetDirectoryName(inputPath) ?? ".",
-                        Path.GetFileNameWithoutExtension(inputPath) + "_repaired" + Path.GetExtension(inputPath)
-                    );
+                    outputPath = Path.Combine(Path.GetDirectoryName(inputPath) ?? ".", defaultFileName);
+                }
+                else if (Directory.Exists(outputPath) || !Path.HasExtension(outputPath))
+                {
+                    outputPath = Path.Combine(outputPath, defaultFileName);
                 }
 
                 Console.WriteLine("\n--- Executing Save Repair Operations ---");
@@ -67,6 +76,12 @@ class Program
                 PrintUsage();
                 return 1;
             }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Console.WriteLine($"[!] File Permission Error: Access denied when reading/writing path. ({ex.Message})");
+            Console.WriteLine("    Ensure your terminal has administrative/write permissions or specify a valid file path for --output.");
+            return 1;
         }
         catch (Exception ex)
         {
@@ -100,8 +115,8 @@ class Program
         Console.WriteLine("  analyze     Inspect and log corruption issues in a save archive.");
         Console.WriteLine("  fix         Repair corrupt binary streams and missing references.");
         Console.WriteLine("\nOptions:");
-        Console.WriteLine("  --input, -i <path>           Path to .coc / .zip save file.");
-        Console.WriteLine("  --output, -o <path>          Path for fixed .coc / .zip output.");
+        Console.WriteLine("  --input, -i <path>           Path to .coc / .zip / .cok save file.");
+        Console.WriteLine("  --output, -o <path>          Path or directory for fixed output file.");
         Console.WriteLine("  --clean-nan                  Scan and sanitize NaN/Infinity float values.");
         Console.WriteLine("  --remap-missing-prefabs      Remap unmapped/null prefab GUIDs to defaults.");
     }

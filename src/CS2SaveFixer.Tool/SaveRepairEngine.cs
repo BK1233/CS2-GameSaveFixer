@@ -48,7 +48,9 @@ public class SaveRepairEngine
 
     private static void SanitizeFloatingPointNumbers(byte[] buffer)
     {
-        for (int i = 0; i <= buffer.Length - 4; i += 4)
+        // Guard: skip COSV header (8 bytes)
+        int startOffset = buffer.Length >= 8 ? 8 : 0;
+        for (int i = startOffset; i <= buffer.Length - 4; i += 4)
         {
             float val = BitConverter.ToSingle(buffer, i);
             if (float.IsNaN(val) || float.IsInfinity(val))
@@ -61,7 +63,9 @@ public class SaveRepairEngine
 
     private static void RemapNullGuids(byte[] buffer)
     {
-        for (int i = 0; i <= buffer.Length - 16; i += 16)
+        // Guard: skip COSV header (8 bytes)
+        int startOffset = buffer.Length >= 8 ? 8 : 0;
+        for (int i = startOffset; i <= buffer.Length - 16; i += 16)
         {
             bool isNull = true;
             for (int j = 0; j < 16; j++)
@@ -120,6 +124,13 @@ public class SaveRepairEngine
 
     public static void SaveArchiveFile(SaveArchive archive, string outputPath)
     {
+        // Ensure parent directory exists
+        string? parentDir = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+        {
+            Directory.CreateDirectory(parentDir);
+        }
+
         if (File.Exists(outputPath))
         {
             File.Delete(outputPath);
