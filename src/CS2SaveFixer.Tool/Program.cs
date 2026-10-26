@@ -62,10 +62,23 @@ class Program
                 }
 
                 Console.WriteLine("\n--- Executing Save Repair Operations ---");
-                var repairedArchive = SaveRepairEngine.Repair(archive, cleanNan, remapPrefabs);
+                var repairResult = SaveRepairEngine.Repair(archive, cleanNan, remapPrefabs);
 
-                Console.WriteLine($"[+] Saving repaired archive to: {outputPath}");
-                SaveRepairEngine.SaveArchiveFile(repairedArchive, outputPath);
+                Console.WriteLine("\n--- Summary of Issues Found & Fixes Applied ---");
+                if (repairResult.FixesApplied.Count > 0)
+                {
+                    foreach (var fix in repairResult.FixesApplied)
+                    {
+                        Console.WriteLine($" [✓] {fix}");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine(" [i] No corruption issues found requiring modification.");
+                }
+
+                Console.WriteLine($"\n[+] Saving repaired archive to: {outputPath}");
+                SaveRepairEngine.SaveArchiveFile(repairResult.RepairedArchive, outputPath);
 
                 Console.WriteLine("[✓] Repair complete! You may now test loading the save in CS2.");
                 return 0;

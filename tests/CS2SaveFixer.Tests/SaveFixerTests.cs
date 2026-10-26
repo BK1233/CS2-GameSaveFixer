@@ -96,8 +96,13 @@ public class SaveFixerTests : IDisposable
         string outputPath = Path.Combine(_tempDirectory, "MockCity_Fixed.coc");
 
         var archive = SaveRepairEngine.LoadArchive(savePath);
-        var repaired = SaveRepairEngine.Repair(archive, cleanNan: true, remapPrefabs: true);
-        SaveRepairEngine.SaveArchiveFile(repaired, outputPath);
+        var repairResult = SaveRepairEngine.Repair(archive, cleanNan: true, remapPrefabs: true);
+
+        Assert.NotEmpty(repairResult.FixesApplied);
+        Assert.True(repairResult.NanValuesSanitized > 0);
+        Assert.True(repairResult.NullGuidsRemapped > 0);
+
+        SaveRepairEngine.SaveArchiveFile(repairResult.RepairedArchive, outputPath);
 
         Assert.True(File.Exists(outputPath));
 
