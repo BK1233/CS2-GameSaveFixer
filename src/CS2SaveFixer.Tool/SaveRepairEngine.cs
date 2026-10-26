@@ -40,10 +40,55 @@ public class SaveRepairEngine
 
         repaired.EntitiesData = entitiesBuffer;
 
-        // Clean metadata active mods list if needed
+        // Clean metadata active mods list
         repaired.Metadata.ActiveMods = repaired.Metadata.ActiveMods.Distinct().ToList();
 
+        // Rebuild / repair CID (Content Index Directory) index buffer
+        repaired.AdditionalFiles["savegame.cid"] = BuildCidIndexData(repaired);
+
         return repaired;
+    }
+
+    public static byte[] BuildCidIndexData(SaveArchive archive)
+    {
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms, Encoding.UTF8);
+
+        // CID Header Magic 'COCD' (Colossal Order Content Directory)
+        writer.Write((byte)'C');
+        writer.Write((byte)'O');
+        writer.Write((byte)'C');
+        writer.Write((byte)'D');
+        writer.Write((int)100); // Version
+
+        var entries = new List<(string Name, int Size)>
+        {
+            ("metadata.json", Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(archive.Metadata))),
+            ("Entities.bin", archive.EntitiesData.Length)
+        };
+
+        if (archive.SimulationData.Length > 0)
+        {
+            entries.Add(("Simulation.bin", archive.SimulationData.Length));
+        }
+
+        foreach (var file in archive.AdditionalFiles)
+        {
+            if (!file.Key.Equals("savegame.cid", StringComparison.OrdinalIgnoreCase) &&
+                !file.Key.Equals("world.cid", StringComparison.OrdinalIgnoreCase))
+            {
+                entries.Add((file.Key, file.Value.Length));
+            }
+        }
+
+        writer.Write(entries.Count);
+        foreach (var entry in entries)
+        {
+            writer.Write(entry.Name);
+            writer.Write(entry.Size);
+        }
+
+        return ms.ToArray();
     }
 
     private static void SanitizeFloatingPointNumbers(byte[] buffer)
@@ -136,6 +181,12 @@ public class SaveRepairEngine
             File.Delete(outputPath);
         }
 
+        // Ensure savegame.cid index is built before saving
+        if (!archive.AdditionalFiles.ContainsKey("savegame.cid"))
+        {
+            archive.AdditionalFiles["savegame.cid"] = BuildCidIndexData(archive);
+        }
+
         using var fileStream = new FileStream(outputPath, FileMode.Create);
         using var zip = new ZipArchive(fileStream, ZipArchiveMode.Create);
 
@@ -163,7 +214,7 @@ public class SaveRepairEngine
             }
         }
 
-        // Write additional entries
+        // Write additional entries including savegame.cid
         foreach (var file in archive.AdditionalFiles)
         {
             var entry = zip.CreateEntry(file.Key);
