@@ -212,4 +212,27 @@ public class SaveFixerTests : IDisposable
         Assert.Equal(8, archive.EntitiesData.Length);
         Assert.Equal((byte)'C', archive.EntitiesData[0]);
     }
+
+    [Fact]
+    public void Test_SaveArchiveFile_UsesNoCompressionForCS2FileSystem()
+    {
+        string outputPath = Path.Combine(_tempDirectory, "UncompressedSave.coc");
+        var archive = new SaveArchive
+        {
+            Metadata = new MetadataHeader { CityName = "Uncompressed Test" },
+            EntitiesData = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 }
+        };
+
+        SaveRepairEngine.SaveArchiveFile(archive, outputPath);
+
+        using var zip = ZipFile.OpenRead(outputPath);
+        Assert.NotEmpty(zip.Entries);
+        // ZipArchiveEntry does not expose compression method directly, but opening and reading verifies valid stored entries
+        var metadataEntry = zip.GetEntry("metadata.json");
+        Assert.NotNull(metadataEntry);
+        var entitiesEntry = zip.GetEntry("Entities.bin");
+        Assert.NotNull(entitiesEntry);
+        Assert.Equal(metadataEntry.Length, metadataEntry.CompressedLength);
+        Assert.Equal(entitiesEntry.Length, entitiesEntry.CompressedLength);
+    }
 }
