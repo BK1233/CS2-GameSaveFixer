@@ -170,6 +170,29 @@ public class SaveFixerTests : IDisposable
     }
 
     [Fact]
+    public void Test_LoadArchive_CorruptedZip_FallbackToRawRecovery()
+    {
+        string filePath = Path.Combine(_tempDirectory, "CorruptedSave.coc");
+        byte[] corruptedData = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04 };
+        File.WriteAllBytes(filePath, corruptedData);
+
+        var archive = SaveRepairEngine.LoadArchive(filePath);
+
+        Assert.Equal(corruptedData, archive.EntitiesData);
+        Assert.NotNull(archive.Metadata);
+        Assert.Equal("CorruptedSave", archive.Metadata.CityName);
+        Assert.Equal("1.0.0 (Recovered)", archive.Metadata.GameVersion);
+    }
+
+    [Fact]
+    public void Test_LoadArchive_EmptyFile_ThrowsInvalidDataException()
+    {
+        string filePath = Path.Combine(_tempDirectory, "EmptySave.coc");
+        File.WriteAllBytes(filePath, Array.Empty<byte>());
+
+        var exception = Assert.Throws<InvalidDataException>(() => SaveRepairEngine.LoadArchive(filePath));
+
+        Assert.Equal("Save file is completely empty (0 bytes).", exception.Message);
     public void Test_SaveFixerCleanupSystem_PerformanceBenchmark()
     {
         int entityCount = 50000;
