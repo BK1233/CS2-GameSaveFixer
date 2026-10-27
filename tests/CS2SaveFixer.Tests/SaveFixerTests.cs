@@ -139,4 +139,35 @@ public class SaveFixerTests : IDisposable
         Assert.Equal(0f, entities[0].PositionX); // Entity #1 position sanitized from NaN to 0f
         Assert.Equal(1f, entities[1].PositionX); // Entity #3 position intact
     }
+
+    [Fact]
+    public void Test_SaveFixerCleanupSystem_PerformanceBenchmark()
+    {
+        int entityCount = 50000;
+        var entities = new List<SimulatedEntity>(entityCount);
+        for (int i = 0; i < entityCount; i++)
+        {
+            entities.Add(new SimulatedEntity
+            {
+                Id = i,
+                PositionX = (i % 10 == 0) ? float.NaN : i,
+                PositionY = i,
+                PositionZ = i,
+                IsOrphaned = (i % 5 == 0),
+                HasValidPrefab = (i % 7 != 0)
+            });
+        }
+
+        var originalOut = Console.Out;
+        Console.SetOut(TextWriter.Null);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int fixedCount = SaveFixerCleanupSystem.RunSanitizePass(entities);
+        sw.Stop();
+
+        Console.SetOut(originalOut);
+
+        Assert.True(fixedCount > 0);
+        Console.WriteLine($"[BENCHMARK] Executed RunSanitizePass on {entityCount} entities in {sw.ElapsedMilliseconds} ms. Fixed issues: {fixedCount}. Remaining entities: {entities.Count}");
+    }
 }
