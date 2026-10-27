@@ -114,6 +114,35 @@ public class SaveFixerTests : IDisposable
     }
 
     [Fact]
+    public void Test_SaveFormatUtils_HasValidCosvHeader()
+    {
+        byte[] validHeader = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
+        byte[] invalidMagic = new byte[] { (byte)'X', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
+        byte[] tooShort = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V' };
+
+        Assert.True(SaveFormatUtils.HasValidCosvHeader(validHeader));
+        Assert.False(SaveFormatUtils.HasValidCosvHeader(invalidMagic));
+        Assert.False(SaveFormatUtils.HasValidCosvHeader(tooShort));
+    }
+
+    [Fact]
+    public void Test_SaveFormatUtils_ApplyCosvHeader()
+    {
+        byte[] buffer = new byte[] { 0, 0, 0, 0, 1, 2, 3, 4 };
+        bool applied = SaveFormatUtils.ApplyCosvHeader(buffer);
+
+        Assert.True(applied);
+        Assert.Equal((byte)'C', buffer[0]);
+        Assert.Equal((byte)'O', buffer[1]);
+        Assert.Equal((byte)'S', buffer[2]);
+        Assert.Equal((byte)'V', buffer[3]);
+
+        // Calling again on an already valid buffer returns false (no mutation needed)
+        bool reApplied = SaveFormatUtils.ApplyCosvHeader(buffer);
+        Assert.False(reApplied);
+    }
+
+    [Fact]
     public void Test_ModDeserializationInterceptor_ResolvesMissingPrefabs()
     {
         string missingGuid = Guid.NewGuid().ToString();
@@ -164,5 +193,33 @@ public class SaveFixerTests : IDisposable
         var exception = Assert.Throws<InvalidDataException>(() => SaveRepairEngine.LoadArchive(filePath));
 
         Assert.Equal("Save file is completely empty (0 bytes).", exception.Message);
+    public void Test_SaveFixerCleanupSystem_PerformanceBenchmark()
+    {
+        int entityCount = 50000;
+        var entities = new List<SimulatedEntity>(entityCount);
+        for (int i = 0; i < entityCount; i++)
+        {
+            entities.Add(new SimulatedEntity
+            {
+                Id = i,
+                PositionX = (i % 10 == 0) ? float.NaN : i,
+                PositionY = i,
+                PositionZ = i,
+                IsOrphaned = (i % 5 == 0),
+                HasValidPrefab = (i % 7 != 0)
+            });
+        }
+
+        var originalOut = Console.Out;
+        Console.SetOut(TextWriter.Null);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int fixedCount = SaveFixerCleanupSystem.RunSanitizePass(entities);
+        sw.Stop();
+
+        Console.SetOut(originalOut);
+
+        Assert.True(fixedCount > 0);
+        Console.WriteLine($"[BENCHMARK] Executed RunSanitizePass on {entityCount} entities in {sw.ElapsedMilliseconds} ms. Fixed issues: {fixedCount}. Remaining entities: {entities.Count}");
     }
 }
