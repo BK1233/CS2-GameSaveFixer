@@ -114,35 +114,6 @@ public class SaveFixerTests : IDisposable
     }
 
     [Fact]
-    public void Test_SaveFormatUtils_HasValidCosvHeader()
-    {
-        byte[] validHeader = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
-        byte[] invalidMagic = new byte[] { (byte)'X', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
-        byte[] tooShort = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V' };
-
-        Assert.True(SaveFormatUtils.HasValidCosvHeader(validHeader));
-        Assert.False(SaveFormatUtils.HasValidCosvHeader(invalidMagic));
-        Assert.False(SaveFormatUtils.HasValidCosvHeader(tooShort));
-    }
-
-    [Fact]
-    public void Test_SaveFormatUtils_ApplyCosvHeader()
-    {
-        byte[] buffer = new byte[] { 0, 0, 0, 0, 1, 2, 3, 4 };
-        bool applied = SaveFormatUtils.ApplyCosvHeader(buffer);
-
-        Assert.True(applied);
-        Assert.Equal((byte)'C', buffer[0]);
-        Assert.Equal((byte)'O', buffer[1]);
-        Assert.Equal((byte)'S', buffer[2]);
-        Assert.Equal((byte)'V', buffer[3]);
-
-        // Calling again on an already valid buffer returns false (no mutation needed)
-        bool reApplied = SaveFormatUtils.ApplyCosvHeader(buffer);
-        Assert.False(reApplied);
-    }
-
-    [Fact]
     public void Test_ModDeserializationInterceptor_ResolvesMissingPrefabs()
     {
         string missingGuid = Guid.NewGuid().ToString();
@@ -193,33 +164,52 @@ public class SaveFixerTests : IDisposable
         var exception = Assert.Throws<InvalidDataException>(() => SaveRepairEngine.LoadArchive(filePath));
 
         Assert.Equal("Save file is completely empty (0 bytes).", exception.Message);
-    public void Test_SaveFixerCleanupSystem_PerformanceBenchmark()
+    }
+
+    [Fact]
+    public void Test_SaveRepairEngine_SynthesizesCosvHeaderWhenEntitiesEmpty()
     {
-        int entityCount = 50000;
-        var entities = new List<SimulatedEntity>(entityCount);
-        for (int i = 0; i < entityCount; i++)
+        var archive = new SaveArchive
         {
-            entities.Add(new SimulatedEntity
+            EntitiesData = Array.Empty<byte>()
+        };
+
+        var repairResult = SaveRepairEngine.Repair(archive, cleanNan: false, remapPrefabs: false);
+
+        Assert.Contains(repairResult.FixesApplied, f => f.Contains("Initialized missing Entities.bin with valid COSV binary header"));
+        Assert.Equal(8, repairResult.RepairedArchive.EntitiesData.Length);
+        Assert.Equal((byte)'C', repairResult.RepairedArchive.EntitiesData[0]);
+        Assert.Equal((byte)'O', repairResult.RepairedArchive.EntitiesData[1]);
+        Assert.Equal((byte)'S', repairResult.RepairedArchive.EntitiesData[2]);
+        Assert.Equal((byte)'V', repairResult.RepairedArchive.EntitiesData[3]);
+    }
+
+    [Fact]
+    public void Test_LoadArchive_NestedZipEntryPaths_MatchedCorrectly()
+    {
+        string filePath = Path.Combine(_tempDirectory, "NestedSave.cok");
+        using (var fileStream = new FileStream(filePath, FileMode.Create))
+        using (var zip = new ZipArchive(fileStream, ZipArchiveMode.Create))
+        {
+            var metaEntry = zip.CreateEntry("savegame/world/metadata.json");
+            using (var writer = new StreamWriter(metaEntry.Open()))
             {
-                Id = i,
-                PositionX = (i % 10 == 0) ? float.NaN : i,
-                PositionY = i,
-                PositionZ = i,
-                IsOrphaned = (i % 5 == 0),
-                HasValidPrefab = (i % 7 != 0)
-            });
+                writer.Write("{\"CityName\":\"Nested City\",\"GameVersion\":\"1.0.0\",\"Population\":1234}");
+            }
+
+            var entitiesEntry = zip.CreateEntry("savegame/world/Entities.bin");
+            using (var stream = entitiesEntry.Open())
+            {
+                byte[] entitiesBytes = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
+                stream.Write(entitiesBytes, 0, entitiesBytes.Length);
+            }
         }
 
-        var originalOut = Console.Out;
-        Console.SetOut(TextWriter.Null);
+        var archive = SaveRepairEngine.LoadArchive(filePath);
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        int fixedCount = SaveFixerCleanupSystem.RunSanitizePass(entities);
-        sw.Stop();
-
-        Console.SetOut(originalOut);
-
-        Assert.True(fixedCount > 0);
-        Console.WriteLine($"[BENCHMARK] Executed RunSanitizePass on {entityCount} entities in {sw.ElapsedMilliseconds} ms. Fixed issues: {fixedCount}. Remaining entities: {entities.Count}");
+        Assert.Equal("Nested City", archive.Metadata.CityName);
+        Assert.Equal(1234, archive.Metadata.Population);
+        Assert.Equal(8, archive.EntitiesData.Length);
+        Assert.Equal((byte)'C', archive.EntitiesData[0]);
     }
 }

@@ -15,7 +15,6 @@ public class RepairResult
 public class SaveRepairEngine
 {
     private static readonly byte[] FallbackGuidBytes = Guid.Parse("11111111-2222-3333-4444-555555555555").ToByteArray();
-    private static readonly byte[] ZeroFloatBytes = BitConverter.GetBytes(0.0f);
 
     public static RepairResult Repair(SaveArchive archive, bool cleanNan, bool remapPrefabs)
     {
@@ -29,9 +28,24 @@ public class SaveRepairEngine
 
         byte[] entitiesBuffer = (byte[])archive.EntitiesData.Clone();
 
-        if (SaveFormatUtils.ApplyCosvHeader(entitiesBuffer))
+        if (entitiesBuffer.Length < 4)
         {
-            result.FixesApplied.Add("Restored missing or corrupted COSV magic header bytes in Entities.bin.");
+            // Synthesize minimal valid COSV header (8 bytes: 'COSV' + version 1)
+            entitiesBuffer = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
+            result.FixesApplied.Add("Initialized missing Entities.bin with valid COSV binary header.");
+        }
+        else
+        {
+            if (entitiesBuffer[0] != (byte)'C' || entitiesBuffer[1] != (byte)'O' ||
+                entitiesBuffer[2] != (byte)'S' || entitiesBuffer[3] != (byte)'V')
+            {
+                // Enforce COSV Header
+                entitiesBuffer[0] = (byte)'C';
+                entitiesBuffer[1] = (byte)'O';
+                entitiesBuffer[2] = (byte)'S';
+                entitiesBuffer[3] = (byte)'V';
+                result.FixesApplied.Add("Restored missing or corrupted COSV magic header bytes in Entities.bin.");
+            }
         }
 
         if (cleanNan)
@@ -118,13 +132,14 @@ public class SaveRepairEngine
     {
         int count = 0;
         // Guard: skip COSV header (8 bytes)
-        int startOffset = buffer.Length >= SaveFormatUtils.CosvHeaderSize ? SaveFormatUtils.CosvHeaderSize : 0;
+        int startOffset = buffer.Length >= 8 ? 8 : 0;
         for (int i = startOffset; i <= buffer.Length - 4; i += 4)
         {
             float val = BitConverter.ToSingle(buffer, i);
             if (float.IsNaN(val) || float.IsInfinity(val))
             {
-                Buffer.BlockCopy(ZeroFloatBytes, 0, buffer, i, 4);
+                byte[] zeroBytes = BitConverter.GetBytes(0.0f);
+                Buffer.BlockCopy(zeroBytes, 0, buffer, i, 4);
                 count++;
             }
         }
@@ -135,7 +150,7 @@ public class SaveRepairEngine
     {
         int count = 0;
         // Guard: skip COSV header (8 bytes)
-        int startOffset = buffer.Length >= SaveFormatUtils.CosvHeaderSize ? SaveFormatUtils.CosvHeaderSize : 0;
+        int startOffset = buffer.Length >= 8 ? 8 : 0;
         for (int i = startOffset; i <= buffer.Length - 16; i += 16)
         {
             bool isNull = true;
@@ -202,16 +217,27 @@ public class SaveRepairEngine
 
     private static void ProcessArchiveEntry(SaveArchive archive, string entryName, byte[] bytes)
     {
-        if (entryName.Equals("metadata.json", StringComparison.OrdinalIgnoreCase))
+        string normalizedName = Path.GetFileName(entryName);
+
+        if (normalizedName.Equals("metadata.json", StringComparison.OrdinalIgnoreCase))
         {
-            string json = Encoding.UTF8.GetString(bytes);
-            archive.Metadata = JsonSerializer.Deserialize<MetadataHeader>(json) ?? new MetadataHeader();
+            try
+            {
+                string json = Encoding.UTF8.GetString(bytes);
+                archive.Metadata = JsonSerializer.Deserialize<MetadataHeader>(json) ?? new MetadataHeader();
+            }
+            catch
+            {
+                archive.Metadata = new MetadataHeader();
+            }
         }
-        else if (entryName.Equals("Entities.bin", StringComparison.OrdinalIgnoreCase) || entryName.EndsWith("Entities.bin"))
+        else if (normalizedName.Equals("Entities.bin", StringComparison.OrdinalIgnoreCase) ||
+                 normalizedName.EndsWith(".entities", StringComparison.OrdinalIgnoreCase))
         {
             archive.EntitiesData = bytes;
         }
-        else if (entryName.Equals("Simulation.bin", StringComparison.OrdinalIgnoreCase) || entryName.EndsWith("Simulation.bin"))
+        else if (normalizedName.Equals("Simulation.bin", StringComparison.OrdinalIgnoreCase) ||
+                 normalizedName.EndsWith(".simulation", StringComparison.OrdinalIgnoreCase))
         {
             archive.SimulationData = bytes;
         }
