@@ -78,7 +78,7 @@ public class SaveRepairEngine
             result.FixesApplied.Add($"Deduplicated active mods metadata list ({originalModCount} -> {repaired.Metadata.ActiveMods.Count}).");
         }
 
-        // Rebuild / repair CID (Content Index Directory) index buffer
+        // Always rebuild / refresh CID (Content Index Directory) index buffer to keep entry byte counts accurate
         repaired.AdditionalFiles["savegame.cid"] = BuildCidIndexData(repaired);
         result.FixesApplied.Add("Rebuilt and refreshed Content Index Directory (savegame.cid) manifest.");
 
