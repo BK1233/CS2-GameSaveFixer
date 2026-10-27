@@ -43,7 +43,9 @@ public class SaveAnalyzer
         }
 
         // Check COSV magic bytes
-        if (!SaveFormatUtils.HasValidCosvHeader(archive.EntitiesData))
+        if (archive.EntitiesData.Length < 8 ||
+            archive.EntitiesData[0] != (byte)'C' || archive.EntitiesData[1] != (byte)'O' ||
+            archive.EntitiesData[2] != (byte)'S' || archive.EntitiesData[3] != (byte)'V')
         {
             issues.Add(new ValidationIssue { Severity = "ERROR", Message = "Invalid magic bytes in Entities.bin (expected COSV)." });
         }
@@ -87,6 +89,7 @@ public class SaveAnalyzer
     private static int CountMissingGuidReferences(byte[] buffer)
     {
         int count = 0;
+        byte[] nullGuid = new byte[16];
         for (int i = 0; i <= buffer.Length - 16; i += 16)
         {
             bool isNull = true;

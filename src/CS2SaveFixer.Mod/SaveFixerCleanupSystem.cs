@@ -20,12 +20,9 @@ public class SaveFixerCleanupSystem
     public static int RunSanitizePass(List<SimulatedEntity> entities)
     {
         int fixedCount = 0;
-        int writeIndex = 0;
 
-        for (int readIndex = 0; readIndex < entities.Count; readIndex++)
+        foreach (var entity in entities.ToList())
         {
-            var entity = entities[readIndex];
-
             // 1. Sanitize float coordinates (NaN / Inf)
             if (float.IsNaN(entity.PositionX) || float.IsInfinity(entity.PositionX) ||
                 float.IsNaN(entity.PositionY) || float.IsInfinity(entity.PositionY) ||
@@ -41,22 +38,10 @@ public class SaveFixerCleanupSystem
             // 2. Remove invalid/orphaned simulation entities
             if (entity.IsOrphaned || !entity.HasValidPrefab)
             {
+                entities.Remove(entity);
                 fixedCount++;
                 Console.WriteLine($"[CS2SaveFixer] Purged orphaned entity ID {entity.Id}.");
             }
-            else
-            {
-                if (writeIndex != readIndex)
-                {
-                    entities[writeIndex] = entity;
-                }
-                writeIndex++;
-            }
-        }
-
-        if (writeIndex < entities.Count)
-        {
-            entities.RemoveRange(writeIndex, entities.Count - writeIndex);
         }
 
         Console.WriteLine($"[CS2SaveFixer] Sanitize pass complete. Fixed/cleaned {fixedCount} entity issues.");
