@@ -114,6 +114,35 @@ public class SaveFixerTests : IDisposable
     }
 
     [Fact]
+    public void Test_SaveFormatUtils_HasValidCosvHeader()
+    {
+        byte[] validHeader = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
+        byte[] invalidMagic = new byte[] { (byte)'X', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 };
+        byte[] tooShort = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V' };
+
+        Assert.True(SaveFormatUtils.HasValidCosvHeader(validHeader));
+        Assert.False(SaveFormatUtils.HasValidCosvHeader(invalidMagic));
+        Assert.False(SaveFormatUtils.HasValidCosvHeader(tooShort));
+    }
+
+    [Fact]
+    public void Test_SaveFormatUtils_ApplyCosvHeader()
+    {
+        byte[] buffer = new byte[] { 0, 0, 0, 0, 1, 2, 3, 4 };
+        bool applied = SaveFormatUtils.ApplyCosvHeader(buffer);
+
+        Assert.True(applied);
+        Assert.Equal((byte)'C', buffer[0]);
+        Assert.Equal((byte)'O', buffer[1]);
+        Assert.Equal((byte)'S', buffer[2]);
+        Assert.Equal((byte)'V', buffer[3]);
+
+        // Calling again on an already valid buffer returns false (no mutation needed)
+        bool reApplied = SaveFormatUtils.ApplyCosvHeader(buffer);
+        Assert.False(reApplied);
+    }
+
+    [Fact]
     public void Test_ModDeserializationInterceptor_ResolvesMissingPrefabs()
     {
         string missingGuid = Guid.NewGuid().ToString();

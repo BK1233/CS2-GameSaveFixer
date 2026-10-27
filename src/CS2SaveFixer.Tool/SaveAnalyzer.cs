@@ -43,9 +43,7 @@ public class SaveAnalyzer
         }
 
         // Check COSV magic bytes
-        if (archive.EntitiesData.Length < 8 ||
-            archive.EntitiesData[0] != (byte)'C' || archive.EntitiesData[1] != (byte)'O' ||
-            archive.EntitiesData[2] != (byte)'S' || archive.EntitiesData[3] != (byte)'V')
+        if (!SaveFormatUtils.HasValidCosvHeader(archive.EntitiesData))
         {
             issues.Add(new ValidationIssue { Severity = "ERROR", Message = "Invalid magic bytes in Entities.bin (expected COSV)." });
         }
