@@ -87,7 +87,6 @@ public class SaveAnalyzer
     private static int CountMissingGuidReferences(byte[] buffer)
     {
         int count = 0;
-        byte[] nullGuid = new byte[16];
         for (int i = 0; i <= buffer.Length - 16; i += 16)
         {
             bool isNull = true;
