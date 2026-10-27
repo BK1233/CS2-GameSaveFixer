@@ -284,6 +284,24 @@ public class SaveFixerTests : IDisposable
     }
 
     [Fact]
+    public void Test_SaveRepairEngine_RebuildsCidManifestWithUpdatedSizes()
+    {
+        var archive = new SaveArchive
+        {
+            Metadata = new MetadataHeader { CityName = "Updated CID City" },
+            EntitiesData = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 }
+        };
+
+        var repairResult = SaveRepairEngine.Repair(archive, cleanNan: false, remapPrefabs: false);
+
+        Assert.True(repairResult.RepairedArchive.AdditionalFiles.ContainsKey("savegame.cid"));
+        byte[] cidBytes = repairResult.RepairedArchive.AdditionalFiles["savegame.cid"];
+        using var reader = new BinaryReader(new MemoryStream(cidBytes), Encoding.UTF8);
+        char[] magic = reader.ReadChars(4);
+        Assert.Equal("COCD", new string(magic));
+    }
+
+    [Fact]
     public void Test_SaveArchiveFile_PreventsDuplicatePrimaryEntries()
     {
         string outputPath = Path.Combine(_tempDirectory, "DeduplicationTest.coc");
