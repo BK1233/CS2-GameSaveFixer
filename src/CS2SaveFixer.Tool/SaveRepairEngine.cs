@@ -15,6 +15,7 @@ public class RepairResult
 public class SaveRepairEngine
 {
     private static readonly byte[] FallbackGuidBytes = Guid.Parse("11111111-2222-3333-4444-555555555555").ToByteArray();
+    private static readonly byte[] ZeroFloatBytes = BitConverter.GetBytes(0.0f);
 
     public static RepairResult Repair(SaveArchive archive, bool cleanNan, bool remapPrefabs)
     {
@@ -123,8 +124,7 @@ public class SaveRepairEngine
             float val = BitConverter.ToSingle(buffer, i);
             if (float.IsNaN(val) || float.IsInfinity(val))
             {
-                byte[] zeroBytes = BitConverter.GetBytes(0.0f);
-                Buffer.BlockCopy(zeroBytes, 0, buffer, i, 4);
+                Buffer.BlockCopy(ZeroFloatBytes, 0, buffer, i, 4);
                 count++;
             }
         }
