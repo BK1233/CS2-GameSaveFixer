@@ -270,34 +270,34 @@ public class SaveRepairEngine
         using var fileStream = new FileStream(outputPath, FileMode.Create);
         using var zip = new ZipArchive(fileStream, ZipArchiveMode.Create);
 
-        // Write metadata.json
-        var metaEntry = zip.CreateEntry("metadata.json");
+        // Write metadata.json with NoCompression (Store mode) as required by CS2 FileSystemDataSource
+        var metaEntry = zip.CreateEntry("metadata.json", CompressionLevel.NoCompression);
         using (var writer = new StreamWriter(metaEntry.Open()))
         {
             writer.Write(JsonSerializer.Serialize(archive.Metadata, new JsonSerializerOptions { WriteIndented = true }));
         }
 
-        // Write Entities.bin
-        var entitiesEntry = zip.CreateEntry("Entities.bin");
+        // Write Entities.bin with NoCompression
+        var entitiesEntry = zip.CreateEntry("Entities.bin", CompressionLevel.NoCompression);
         using (var stream = entitiesEntry.Open())
         {
             stream.Write(archive.EntitiesData, 0, archive.EntitiesData.Length);
         }
 
-        // Write Simulation.bin
+        // Write Simulation.bin with NoCompression
         if (archive.SimulationData.Length > 0)
         {
-            var simEntry = zip.CreateEntry("Simulation.bin");
+            var simEntry = zip.CreateEntry("Simulation.bin", CompressionLevel.NoCompression);
             using (var stream = simEntry.Open())
             {
                 stream.Write(archive.SimulationData, 0, archive.SimulationData.Length);
             }
         }
 
-        // Write additional entries including savegame.cid
+        // Write additional entries including savegame.cid with NoCompression
         foreach (var file in archive.AdditionalFiles)
         {
-            var entry = zip.CreateEntry(file.Key);
+            var entry = zip.CreateEntry(file.Key, CompressionLevel.NoCompression);
             using var stream = entry.Open();
             stream.Write(file.Value, 0, file.Value.Length);
         }
