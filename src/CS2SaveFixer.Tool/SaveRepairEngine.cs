@@ -98,9 +98,12 @@ public class SaveRepairEngine
         writer.Write((byte)'D');
         writer.Write((int)100); // Version
 
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        byte[] metadataBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(archive.Metadata, jsonOptions));
+
         var entries = new List<(string Name, int Size)>
         {
-            ("metadata.json", Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(archive.Metadata))),
+            ("metadata.json", metadataBytes.Length),
             ("Entities.bin", archive.EntitiesData.Length)
         };
 
@@ -111,8 +114,12 @@ public class SaveRepairEngine
 
         foreach (var file in archive.AdditionalFiles)
         {
-            if (!file.Key.Equals("savegame.cid", StringComparison.OrdinalIgnoreCase) &&
-                !file.Key.Equals("world.cid", StringComparison.OrdinalIgnoreCase))
+            string fileName = Path.GetFileName(file.Key);
+            if (!fileName.Equals("savegame.cid", StringComparison.OrdinalIgnoreCase) &&
+                !fileName.Equals("world.cid", StringComparison.OrdinalIgnoreCase) &&
+                !fileName.Equals("metadata.json", StringComparison.OrdinalIgnoreCase) &&
+                !fileName.Equals("Entities.bin", StringComparison.OrdinalIgnoreCase) &&
+                !fileName.Equals("Simulation.bin", StringComparison.OrdinalIgnoreCase))
             {
                 entries.Add((file.Key, file.Value.Length));
             }
@@ -271,10 +278,13 @@ public class SaveRepairEngine
         using var zip = new ZipArchive(fileStream, ZipArchiveMode.Create);
 
         // Write metadata.json with NoCompression (Store mode) as required by CS2 FileSystemDataSource
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        byte[] metadataBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(archive.Metadata, jsonOptions));
+
         var metaEntry = zip.CreateEntry("metadata.json", CompressionLevel.NoCompression);
-        using (var writer = new StreamWriter(metaEntry.Open()))
+        using (var stream = metaEntry.Open())
         {
-            writer.Write(JsonSerializer.Serialize(archive.Metadata, new JsonSerializerOptions { WriteIndented = true }));
+            stream.Write(metadataBytes, 0, metadataBytes.Length);
         }
 
         // Write Entities.bin with NoCompression
@@ -297,6 +307,14 @@ public class SaveRepairEngine
         // Write additional entries including savegame.cid with NoCompression
         foreach (var file in archive.AdditionalFiles)
         {
+            string fileName = Path.GetFileName(file.Key);
+            if (fileName.Equals("metadata.json", StringComparison.OrdinalIgnoreCase) ||
+                fileName.Equals("Entities.bin", StringComparison.OrdinalIgnoreCase) ||
+                fileName.Equals("Simulation.bin", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             var entry = zip.CreateEntry(file.Key, CompressionLevel.NoCompression);
             using var stream = entry.Open();
             stream.Write(file.Value, 0, file.Value.Length);

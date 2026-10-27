@@ -235,4 +235,76 @@ public class SaveFixerTests : IDisposable
         Assert.Equal(metadataEntry.Length, metadataEntry.CompressedLength);
         Assert.Equal(entitiesEntry.Length, entitiesEntry.CompressedLength);
     }
+
+    [Fact]
+    public void Test_BuildCidIndexData_MetadataSizeMatchesSavedFileBytes()
+    {
+        string outputPath = Path.Combine(_tempDirectory, "CidSizeMatchTest.coc");
+        var archive = new SaveArchive
+        {
+            Metadata = new MetadataHeader { CityName = "CID Match Test City", Population = 999 },
+            EntitiesData = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 }
+        };
+
+        var repairResult = SaveRepairEngine.Repair(archive, cleanNan: false, remapPrefabs: false);
+        SaveRepairEngine.SaveArchiveFile(repairResult.RepairedArchive, outputPath);
+
+        using var zip = ZipFile.OpenRead(outputPath);
+        var metadataEntry = zip.GetEntry("metadata.json");
+        Assert.NotNull(metadataEntry);
+
+        var cidEntry = zip.GetEntry("savegame.cid");
+        Assert.NotNull(cidEntry);
+
+        using var ms = new MemoryStream();
+        using (var cidStream = cidEntry.Open())
+        {
+            cidStream.CopyTo(ms);
+        }
+
+        byte[] cidBytes = ms.ToArray();
+        using var reader = new BinaryReader(new MemoryStream(cidBytes), Encoding.UTF8);
+
+        char[] magic = reader.ReadChars(4);
+        Assert.Equal("COCD", new string(magic));
+        int version = reader.ReadInt32();
+        Assert.Equal(100, version);
+
+        int entryCount = reader.ReadInt32();
+        var entries = new Dictionary<string, int>();
+        for (int i = 0; i < entryCount; i++)
+        {
+            string name = reader.ReadString();
+            int size = reader.ReadInt32();
+            entries[name] = size;
+        }
+
+        Assert.True(entries.ContainsKey("metadata.json"));
+        Assert.Equal((int)metadataEntry.Length, entries["metadata.json"]);
+    }
+
+    [Fact]
+    public void Test_SaveArchiveFile_PreventsDuplicatePrimaryEntries()
+    {
+        string outputPath = Path.Combine(_tempDirectory, "DeduplicationTest.coc");
+        var archive = new SaveArchive
+        {
+            Metadata = new MetadataHeader { CityName = "Deduplication Test City" },
+            EntitiesData = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 },
+            AdditionalFiles = new Dictionary<string, byte[]>
+            {
+                { "metadata.json", Encoding.UTF8.GetBytes("{\"duplicate\":true}") },
+                { "Entities.bin", new byte[] { 1, 2, 3, 4 } }
+            }
+        };
+
+        SaveRepairEngine.SaveArchiveFile(archive, outputPath);
+
+        using var zip = ZipFile.OpenRead(outputPath);
+        int metadataCount = zip.Entries.Count(e => e.Name.Equals("metadata.json", StringComparison.OrdinalIgnoreCase));
+        int entitiesCount = zip.Entries.Count(e => e.Name.Equals("Entities.bin", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(1, metadataCount);
+        Assert.Equal(1, entitiesCount);
+    }
 }
