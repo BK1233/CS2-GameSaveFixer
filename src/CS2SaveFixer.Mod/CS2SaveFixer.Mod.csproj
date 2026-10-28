@@ -7,4 +7,10 @@
     <RootNamespace>CS2SaveFixer.Mod</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="mod.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

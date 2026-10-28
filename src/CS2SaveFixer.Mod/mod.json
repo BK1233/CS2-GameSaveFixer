@@ -1,0 +1,10 @@
+{
+  "id": "CS2SaveFixer",
+  "name": "CS2 Save Fixer",
+  "version": "1.0.0",
+  "shortDescription": "Runtime save repair and fallback deserialization mod for Cities: Skylines II.",
+  "author": "CS2SaveFixer Team",
+  "assemblyName": "CS2SaveFixer.Mod.dll",
+  "entryClass": "CS2SaveFixer.Mod.SaveFixerMod",
+  "modType": "CodeMod"
+}

@@ -423,4 +423,20 @@ public class SaveFixerTests : IDisposable
         using var doc = JsonDocument.Parse(repairedJson);
         Assert.NotNull(doc);
     }
+
+    [Fact]
+    public void Test_ModManifest_IsValidJson()
+    {
+        string modManifestPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/CS2SaveFixer.Mod/mod.json"));
+        Assert.True(File.Exists(modManifestPath));
+
+        string jsonContent = File.ReadAllText(modManifestPath);
+        using var doc = JsonDocument.Parse(jsonContent);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("id", out var idProp));
+        Assert.Equal("CS2SaveFixer", idProp.GetString());
+        Assert.True(root.TryGetProperty("assemblyName", out var assemblyProp));
+        Assert.Equal("CS2SaveFixer.Mod.dll", assemblyProp.GetString());
+    }
 }
