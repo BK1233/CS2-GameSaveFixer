@@ -1,32 +1,35 @@
-namespace CS2SaveFixer.Mod;
+using System;
 
-public interface IMod
+namespace CS2SaveFixer.Mod
 {
-    void OnLoad();
-    void OnUnload();
-}
-
-public class SaveFixerMod : IMod
-{
-    public static SaveFixerMod Instance { get; private set; } = null!;
-    public bool IsFallbackPrefabResolverEnabled { get; set; } = true;
-    public bool IsAutomaticCleanupSystemEnabled { get; set; } = true;
-
-    public void OnLoad()
+    public interface IMod
     {
-        Instance = this;
-        Console.WriteLine("[CS2SaveFixer] CS2 Save Fixer Runtime Mod loaded successfully.");
-        InitializeSystems();
+        void OnLoad();
+        void OnUnload();
     }
 
-    public void OnUnload()
+    public class SaveFixerMod : IMod
     {
-        Console.WriteLine("[CS2SaveFixer] CS2 Save Fixer Runtime Mod unloaded.");
-    }
+        public static SaveFixerMod Instance { get; private set; } = null!;
+        public bool IsFallbackPrefabResolverEnabled { get; set; } = true;
+        public bool IsAutomaticCleanupSystemEnabled { get; set; } = true;
 
-    private void InitializeSystems()
-    {
-        DeserializationInterceptor.InstallPatches();
-        SaveFixerCleanupSystem.Initialize();
+        public void OnLoad()
+        {
+            Instance = this;
+            Console.WriteLine("[CS2SaveFixer] CS2 Save Fixer Runtime Mod loaded successfully.");
+            InitializeSystems();
+        }
+
+        public void OnUnload()
+        {
+            Console.WriteLine("[CS2SaveFixer] CS2 Save Fixer Runtime Mod unloaded.");
+        }
+
+        private void InitializeSystems()
+        {
+            DeserializationInterceptor.InstallPatches();
+            SaveFixerCleanupSystem.Initialize();
+        }
     }
 }
