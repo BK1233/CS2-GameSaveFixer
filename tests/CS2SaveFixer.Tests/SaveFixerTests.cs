@@ -401,4 +401,26 @@ public class SaveFixerTests : IDisposable
         var metaBinEntry = zip.GetEntry("metadata.bin");
         Assert.NotNull(metaBinEntry);
     }
+
+    [Fact]
+    public void Test_SaveRepairEngine_SanitizesTruncatedJsonTextAssets()
+    {
+        var archive = new SaveArchive
+        {
+            Metadata = new MetadataHeader { CityName = "Truncated JSON Test" },
+            EntitiesData = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 },
+            AdditionalFiles = new Dictionary<string, byte[]>
+            {
+                { "custom_setting.json", Encoding.UTF8.GetBytes("{\"settingName\": \"test\", \"value\": 123") } // Missing closing brace }
+            }
+        };
+
+        var repairResult = SaveRepairEngine.Repair(archive, cleanNan: false, remapPrefabs: false);
+
+        Assert.Contains(repairResult.FixesApplied, f => f.Contains("Repaired syntax and structure"));
+        byte[] repairedBytes = repairResult.RepairedArchive.AdditionalFiles["custom_setting.json"];
+        string repairedJson = Encoding.UTF8.GetString(repairedBytes);
+        using var doc = JsonDocument.Parse(repairedJson);
+        Assert.NotNull(doc);
+    }
 }

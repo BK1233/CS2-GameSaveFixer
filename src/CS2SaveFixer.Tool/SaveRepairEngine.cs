@@ -83,6 +83,13 @@ public class SaveRepairEngine
             result.FixesApplied.Add($"Deduplicated active mods metadata list ({originalModCount} -> {repaired.Metadata.ActiveMods.Count}).");
         }
 
+        // Sanitize and repair any truncated JSON text assets in AdditionalFiles
+        int sanitizedTextCount = SanitizeTextAssets(repaired.AdditionalFiles);
+        if (sanitizedTextCount > 0)
+        {
+            result.FixesApplied.Add($"Repaired syntax and structure in {sanitizedTextCount} additional text/metadata asset files.");
+        }
+
         // Generate binary metadata.bin header
         byte[] metadataBin = GenerateMetadataBin(repaired.Metadata);
         repaired.AdditionalFiles["metadata.bin"] = metadataBin;
@@ -185,6 +192,92 @@ public class SaveRepairEngine
             }
         }
         return count;
+    }
+
+    public static int SanitizeTextAssets(Dictionary<string, byte[]> files)
+    {
+        int fixedCount = 0;
+        var keys = files.Keys.ToList();
+
+        foreach (var key in keys)
+        {
+            string fileName = Path.GetFileName(key);
+            if (fileName.Equals("savegame.cid", StringComparison.OrdinalIgnoreCase) ||
+                fileName.Equals("metadata.json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string ext = Path.GetExtension(key).ToLowerInvariant();
+            if (ext == ".json" || ext == ".cid" || ext == ".setting" || ext == ".coc" || ext == ".txt")
+            {
+                byte[] raw = files[key];
+                if (raw.Length == 0) continue;
+
+                try
+                {
+                    string text = Encoding.UTF8.GetString(raw);
+                    if (text.TrimStart().StartsWith("{") || text.TrimStart().StartsWith("["))
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(text);
+                        }
+                        catch (JsonException)
+                        {
+                            string repairedText = RepairTruncatedJson(text);
+                            files[key] = Encoding.UTF8.GetBytes(repairedText);
+                            fixedCount++;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore non-UTF8 binary assets
+                }
+            }
+        }
+
+        return fixedCount;
+    }
+
+    private static string RepairTruncatedJson(string corruptedJson)
+    {
+        int lastBrace = corruptedJson.LastIndexOf('}');
+        int lastBracket = corruptedJson.LastIndexOf(']');
+        int lastValid = Math.Max(lastBrace, lastBracket);
+
+        if (lastValid > 0)
+        {
+            string truncated = corruptedJson.Substring(0, lastValid + 1);
+            try
+            {
+                using var doc = JsonDocument.Parse(truncated);
+                return truncated;
+            }
+            catch
+            {
+                // Fallback to balancing braces
+            }
+        }
+
+        int openBraces = corruptedJson.Count(c => c == '{') - corruptedJson.Count(c => c == '}');
+        int openBrackets = corruptedJson.Count(c => c == '[') - corruptedJson.Count(c => c == ']');
+
+        var sb = new StringBuilder(corruptedJson);
+        for (int i = 0; i < openBrackets; i++) sb.Append(']');
+        for (int i = 0; i < openBraces; i++) sb.Append('}');
+
+        string candidate = sb.ToString();
+        try
+        {
+            using var doc = JsonDocument.Parse(candidate);
+            return candidate;
+        }
+        catch
+        {
+            return "{}";
+        }
     }
 
     public static byte[] GenerateMetadataBin(MetadataHeader metadata)
