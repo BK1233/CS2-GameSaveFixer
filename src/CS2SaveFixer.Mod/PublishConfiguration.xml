@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PublishConfiguration>
+  <!-- ModId: Assign the 6-digit Mod ID received after running PublishNewMod -->
+  <ModId Value="" />
+  <!-- DisplayName: Public title of the mod on Paradox Mods -->
+  <DisplayName Value="CS2 Save Fixer" />
+  <!-- ShortDescription: Summary paragraph displayed in mod listing cards -->
+  <ShortDescription Value="Runtime save repair, corrupted component bypass, and fallback asset deserialization mod for Cities: Skylines II." />
+  <!-- LongDescription: Detailed documentation and usage instructions -->
+  <LongDescription Value="CS2 Save Fixer is an emergency save recovery and runtime protection mod for Cities: Skylines II. It dynamically intercepts missing prefab GUID errors during loading and runs automated ECS cleanup passes to sanitize floating-point (NaN/Infinity) coordinate corruptions." />
+  <!-- ModVersion: Version tag string -->
+  <ModVersion Value="1.0.0" />
+  <!-- ChangeLog: Release notes for this version -->
+  <ChangeLog Value="Initial release of CS2 Save Fixer code mod with safe deserialization and runtime ECS sanitization." />
+  <!-- ExternalLinks: Community, source code, and discussion links -->
+  <ExternalLinks>
+    <Link Type="Github" Url="https://github.com/BK1233/CS2-GameSaveFixer" />
+  </ExternalLinks>
+  <!-- Tags: Primary category classification -->
+  <Tags>
+    <Tag Value="CodeMod" />
+    <Tag Value="Utility" />
+  </Tags>
+</PublishConfiguration>

@@ -452,4 +452,31 @@ public class SaveFixerTests : IDisposable
         Assert.True(root.TryGetProperty("assemblyName", out var assemblyProp));
         Assert.Equal("CS2SaveFixer.Mod.dll", assemblyProp.GetString());
     }
+
+    [Fact]
+    public void Test_PublishConfiguration_IsValidXml()
+    {
+        string? dir = AppContext.BaseDirectory;
+        string? publishConfigPath = null;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            string candidate = Path.Combine(dir, "src", "CS2SaveFixer.Mod", "PublishConfiguration.xml");
+            if (File.Exists(candidate))
+            {
+                publishConfigPath = candidate;
+                break;
+            }
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        Assert.NotNull(publishConfigPath);
+        Assert.True(File.Exists(publishConfigPath));
+
+        var xmlDoc = new System.Xml.XmlDocument();
+        xmlDoc.Load(publishConfigPath);
+
+        var displayNameNode = xmlDoc.SelectSingleNode("//DisplayName/@Value");
+        Assert.NotNull(displayNameNode);
+        Assert.Equal("CS2 Save Fixer", displayNameNode.Value);
+    }
 }
