@@ -19,6 +19,8 @@ class Program
         string outputPath = GetArgValue(args, "--output") ?? GetArgValue(args, "-o") ?? string.Empty;
         bool cleanNan = HasFlag(args, "--clean-nan");
         bool remapPrefabs = HasFlag(args, "--remap-missing-prefabs");
+        bool dryRun = HasFlag(args, "--dry-run");
+        bool noBackup = HasFlag(args, "--no-backup");
 
         if (string.IsNullOrEmpty(inputPath))
         {
@@ -77,6 +79,18 @@ class Program
                     Console.WriteLine(" [i] No corruption issues found requiring modification.");
                 }
 
+                if (dryRun)
+                {
+                    Console.WriteLine("\n[i] Dry-run mode enabled. No files were written to disk.");
+                    return 0;
+                }
+
+                if (!noBackup)
+                {
+                    string backupPath = SaveRepairEngine.CreateBackupFile(inputPath);
+                    Console.WriteLine($"[+] Created backup file: {backupPath}");
+                }
+
                 Console.WriteLine($"\n[+] Saving repaired archive to: {outputPath}");
                 SaveRepairEngine.SaveArchiveFile(repairResult.RepairedArchive, outputPath);
 
@@ -132,5 +146,7 @@ class Program
         Console.WriteLine("  --output, -o <path>          Path or directory for fixed output file.");
         Console.WriteLine("  --clean-nan                  Scan and sanitize NaN/Infinity float values.");
         Console.WriteLine("  --remap-missing-prefabs      Remap unmapped/null prefab GUIDs to defaults.");
+        Console.WriteLine("  --dry-run                    Simulate repair operations without writing files.");
+        Console.WriteLine("  --no-backup                  Skip creating an automatic .bak backup copy.");
     }
 }

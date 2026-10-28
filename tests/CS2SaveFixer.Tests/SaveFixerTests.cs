@@ -325,4 +325,80 @@ public class SaveFixerTests : IDisposable
         Assert.Equal(1, metadataCount);
         Assert.Equal(1, entitiesCount);
     }
+
+    [Fact]
+    public void Test_CreateBackupFile_GeneratesBakAndTimestampedBak()
+    {
+        string samplePath = Path.Combine(_tempDirectory, "SampleSave.coc");
+        File.WriteAllBytes(samplePath, new byte[] { 1, 2, 3, 4 });
+
+        string backup1 = SaveRepairEngine.CreateBackupFile(samplePath);
+        Assert.True(File.Exists(backup1));
+        Assert.EndsWith(".bak", backup1);
+
+        string backup2 = SaveRepairEngine.CreateBackupFile(samplePath);
+        Assert.True(File.Exists(backup2));
+        Assert.EndsWith(".bak", backup2);
+        Assert.NotEqual(backup1, backup2);
+    }
+
+    [Fact]
+    public void Test_SanitizeFloatingPointNumbers_SanitizesSimulationBin()
+    {
+        var archive = new SaveArchive
+        {
+            EntitiesData = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 },
+            SimulationData = new byte[16]
+        };
+
+        // Inject NaN in SimulationData
+        byte[] nanBytes = BitConverter.GetBytes(float.NaN);
+        Buffer.BlockCopy(nanBytes, 0, archive.SimulationData, 8, 4);
+
+        var repairResult = SaveRepairEngine.Repair(archive, cleanNan: true, remapPrefabs: false);
+
+        Assert.True(repairResult.NanValuesSanitized > 0);
+        float sanitizedVal = BitConverter.ToSingle(repairResult.RepairedArchive.SimulationData, 8);
+        Assert.Equal(0.0f, sanitizedVal);
+    }
+
+    [Fact]
+    public void Test_GenerateMetadataBin_CreatesBinaryHeader()
+    {
+        var meta = new MetadataHeader
+        {
+            CityName = "Binary City",
+            GameVersion = "1.0.12f1",
+            Population = 42000,
+            ActiveMods = new List<string> { "ModX" }
+        };
+
+        byte[] binData = SaveRepairEngine.GenerateMetadataBin(meta);
+        using var reader = new BinaryReader(new MemoryStream(binData), Encoding.UTF8);
+
+        char[] magic = reader.ReadChars(4);
+        Assert.Equal("COMB", new string(magic));
+        int version = reader.ReadInt32();
+        Assert.Equal(100, version);
+        string cityName = reader.ReadString();
+        Assert.Equal("Binary City", cityName);
+    }
+
+    [Fact]
+    public void Test_SaveRepairEngine_IncludesMetadataBinInOutputArchive()
+    {
+        string outputPath = Path.Combine(_tempDirectory, "MetadataBinTest.coc");
+        var archive = new SaveArchive
+        {
+            Metadata = new MetadataHeader { CityName = "MetaBin City" },
+            EntitiesData = new byte[] { (byte)'C', (byte)'O', (byte)'S', (byte)'V', 0, 0, 0, 1 }
+        };
+
+        var repairResult = SaveRepairEngine.Repair(archive, cleanNan: false, remapPrefabs: false);
+        SaveRepairEngine.SaveArchiveFile(repairResult.RepairedArchive, outputPath);
+
+        using var zip = ZipFile.OpenRead(outputPath);
+        var metaBinEntry = zip.GetEntry("metadata.bin");
+        Assert.NotNull(metaBinEntry);
+    }
 }

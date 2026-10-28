@@ -48,15 +48,20 @@ public class SaveRepairEngine
             }
         }
 
+        byte[] simulationBuffer = (byte[])archive.SimulationData.Clone();
+
         if (cleanNan)
         {
-            int nanCount = SanitizeFloatingPointNumbers(entitiesBuffer);
+            int nanEntities = SanitizeFloatingPointNumbers(entitiesBuffer);
+            int nanSimulation = simulationBuffer.Length > 0 ? SanitizeFloatingPointNumbers(simulationBuffer) : 0;
+            int nanCount = nanEntities + nanSimulation;
             result.NanValuesSanitized = nanCount;
             if (nanCount > 0)
             {
-                result.FixesApplied.Add($"Sanitized {nanCount} corrupted floating-point (NaN/Infinity) values in entity component data.");
+                result.FixesApplied.Add($"Sanitized {nanCount} corrupted floating-point (NaN/Infinity) values ({nanEntities} in Entities, {nanSimulation} in Simulation).");
             }
         }
+        repaired.SimulationData = simulationBuffer;
 
         if (remapPrefabs)
         {
@@ -78,9 +83,13 @@ public class SaveRepairEngine
             result.FixesApplied.Add($"Deduplicated active mods metadata list ({originalModCount} -> {repaired.Metadata.ActiveMods.Count}).");
         }
 
+        // Generate binary metadata.bin header
+        byte[] metadataBin = GenerateMetadataBin(repaired.Metadata);
+        repaired.AdditionalFiles["metadata.bin"] = metadataBin;
+
         // Always rebuild / refresh CID (Content Index Directory) index buffer to keep entry byte counts accurate
         repaired.AdditionalFiles["savegame.cid"] = BuildCidIndexData(repaired);
-        result.FixesApplied.Add("Rebuilt and refreshed Content Index Directory (savegame.cid) manifest.");
+        result.FixesApplied.Add("Rebuilt and refreshed Content Index Directory (savegame.cid) and metadata.bin headers.");
 
         result.RepairedArchive = repaired;
         return result;
@@ -176,6 +185,50 @@ public class SaveRepairEngine
             }
         }
         return count;
+    }
+
+    public static byte[] GenerateMetadataBin(MetadataHeader metadata)
+    {
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms, Encoding.UTF8);
+
+        // Header Magic 'COMB' (Colossal Order Metadata Binary)
+        writer.Write((byte)'C');
+        writer.Write((byte)'O');
+        writer.Write((byte)'M');
+        writer.Write((byte)'B');
+        writer.Write((int)100); // Version
+
+        writer.Write(metadata.CityName ?? string.Empty);
+        writer.Write(metadata.GameVersion ?? string.Empty);
+        writer.Write(metadata.Population);
+        writer.Write(metadata.SaveDate ?? string.Empty);
+
+        var activeMods = metadata.ActiveMods ?? new List<string>();
+        writer.Write(activeMods.Count);
+        foreach (var mod in activeMods)
+        {
+            writer.Write(mod ?? string.Empty);
+        }
+
+        return ms.ToArray();
+    }
+
+    public static string CreateBackupFile(string inputPath)
+    {
+        string directory = Path.GetDirectoryName(inputPath) ?? ".";
+        string fileName = Path.GetFileName(inputPath);
+        string defaultBakPath = Path.Combine(directory, fileName + ".bak");
+
+        string backupPath = defaultBakPath;
+        if (File.Exists(defaultBakPath))
+        {
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            backupPath = Path.Combine(directory, $"{fileName}.{timestamp}.bak");
+        }
+
+        File.Copy(inputPath, backupPath, true);
+        return backupPath;
     }
 
     public static SaveArchive LoadArchive(string filePath)
