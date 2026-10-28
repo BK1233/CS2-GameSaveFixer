@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build & Deploy Mod to Cities Skylines II",
+      "type": "shell",
+      "command": "dotnet build src/CS2SaveFixer.Mod/CS2SaveFixer.Mod.csproj -c Release; $target = \"$env:LOCALAPPDATA\\..\\LocalLow\\Colossal Order\\Cities Skylines II\\Mods\\CS2SaveFixer\"; New-Item -ItemType Directory -Force -Path $target; Copy-Item -Path \"src/CS2SaveFixer.Mod/bin/Release/net8.0/*\" -Destination $target -Force",
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Build Standalone CS2SaveFixer Tool",
+      "type": "shell",
+      "command": "dotnet build src/CS2SaveFixer.Tool/CS2SaveFixer.Tool.csproj -c Release",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Run Unit Test Suite",
+      "type": "shell",
+      "command": "dotnet test tests/CS2SaveFixer.Tests/CS2SaveFixer.Tests.csproj",
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}
